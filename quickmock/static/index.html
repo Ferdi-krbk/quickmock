@@ -1,0 +1,1139 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>quickmock — Local API Studio</title>
+  <style>
+    :root {
+      --bg: #111317;
+      --surface: #171a20;
+      --surface-hover: #1d2129;
+      --surface-active: #232832;
+      --border: #262b35;
+      --border-strong: #363d4b;
+      --text: #e4e6eb;
+      --text-muted: #8c93a1;
+      --text-dim: #5e6573;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --danger: #ef4444;
+      --success: #22c55e;
+      --warn: #f59e0b;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+      --font-mono: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+      overflow: hidden;
+    }
+
+    button, input, select, textarea {
+      font-family: inherit;
+      font-size: 12px;
+      color: var(--text);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      outline: none;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--border-strong);
+    }
+    button {
+      cursor: pointer;
+      background: var(--surface);
+      padding: 5px 10px;
+      transition: background 0.1s, border-color 0.1s;
+    }
+    button:hover {
+      background: var(--surface-hover);
+      border-color: var(--border-strong);
+    }
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      font-weight: 500;
+    }
+    .btn-primary:hover {
+      background: var(--accent-hover);
+      border-color: var(--accent-hover);
+    }
+    .btn-danger {
+      color: #f87171;
+      border-color: #451a1a;
+      background: #1f1214;
+    }
+    .btn-danger:hover {
+      background: #2d1619;
+      border-color: #7f1d1d;
+    }
+
+    /* App Shell */
+    .app-shell {
+      display: grid;
+      grid-template-columns: 230px 1fr;
+      height: 100vh;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+    }
+    .brand {
+      height: 46px;
+      padding: 0 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .brand-title {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      font-size: 13px;
+      letter-spacing: -0.02em;
+      color: #fff;
+    }
+    .brand-ver {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .db-path {
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--border);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      background: rgba(0,0,0,0.18);
+    }
+
+    .sidebar-section {
+      padding: 12px 14px 6px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .collection-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 8px;
+    }
+    .col-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 8px;
+      margin-bottom: 2px;
+      cursor: pointer;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      border: 1px solid transparent;
+    }
+    .col-item:hover {
+      background: var(--surface-hover);
+      color: var(--text);
+    }
+    .col-item.active {
+      background: var(--surface-active);
+      color: #fff;
+      border-color: var(--border-strong);
+      font-weight: 500;
+    }
+    .col-count {
+      font-size: 11px;
+      color: var(--text-dim);
+      padding: 1px 5px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+    }
+
+    .sidebar-footer {
+      border-top: 1px solid var(--border);
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .sidebar-footer button {
+      width: 100%;
+      text-align: left;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* Main Workspace */
+    .workspace {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Top Header & Navigation Tabs */
+    .topbar {
+      height: 46px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .nav-tabs {
+      display: flex;
+      height: 100%;
+      gap: 2px;
+    }
+    .nav-tab {
+      height: 100%;
+      padding: 0 14px;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .nav-tab:hover {
+      color: var(--text);
+      background: transparent;
+      border-color: transparent;
+    }
+    .nav-tab.active {
+      color: #fff;
+      border-bottom-color: var(--accent);
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .status-pill {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 3px 8px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+    .status-pill.warn {
+      color: var(--warn);
+      border-color: #78350f;
+      background: #1c1409;
+    }
+    .demo-link {
+      text-decoration: none;
+      font-size: 12px;
+      padding: 5px 10px;
+      background: var(--surface-active);
+      border: 1px solid var(--border-strong);
+      color: #fff;
+      font-weight: 500;
+    }
+    .demo-link:hover {
+      border-color: var(--accent);
+    }
+
+    /* Sub-toolbar for Records view */
+    .subbar {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .subbar-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+    }
+    .endpoint-box {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      padding: 5px 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .endpoint-box strong { color: #fff; font-weight: 500; }
+    .search-input {
+      width: 240px;
+      padding: 5px 9px;
+      background: var(--surface);
+    }
+
+    /* Views */
+    .view-pane {
+      display: none;
+      flex: 1;
+      overflow: auto;
+    }
+    .view-pane.active {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Data Grid */
+    .table-wrap {
+      flex: 1;
+      overflow: auto;
+    }
+    table.data-grid {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+    table.data-grid th {
+      position: sticky;
+      top: 0;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      border-right: 1px solid var(--border);
+      padding: 8px 12px;
+      text-align: left;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    table.data-grid th:hover {
+      color: #fff;
+      background: var(--surface-hover);
+    }
+    table.data-grid td {
+      padding: 7px 12px;
+      border-bottom: 1px solid var(--border);
+      border-right: 1px solid var(--border);
+      color: var(--text);
+      max-width: 280px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    table.data-grid tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .val-num { color: #93c5fd; }
+    .val-bool-true { color: #4ade80; }
+    .val-bool-false { color: var(--text-dim); }
+    .val-null { color: var(--text-dim); font-style: italic; }
+
+    /* API Tester Split View */
+    .rest-split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      flex: 1;
+      overflow: hidden;
+    }
+    .rest-col {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      overflow: auto;
+    }
+    .rest-col:first-child {
+      border-right: 1px solid var(--border);
+    }
+    .url-bar {
+      display: flex;
+      gap: 6px;
+    }
+    .url-bar select { width: 95px; font-family: var(--font-mono); font-weight: 600; }
+    .url-bar input { flex: 1; padding: 6px 10px; font-family: var(--font-mono); }
+    .code-area {
+      flex: 1;
+      width: 100%;
+      padding: 12px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: #0c0e12;
+      border: 1px solid var(--border);
+      color: var(--text);
+      resize: none;
+      white-space: pre;
+      overflow: auto;
+    }
+    .field-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 500;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* Chaos & Network View */
+    .chaos-panel {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+    .control-box {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .preset-strip {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg);
+    }
+
+    /* Modals */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      width: 480px;
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      display: flex;
+      flex-direction: column;
+    }
+    .modal-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-body {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .modal-footer {
+      padding: 10px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-shell">
+    <!-- Left Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-title">quickmock</span>
+        <span id="versionBadge" class="brand-ver">v1.0.0</span>
+      </div>
+      <div id="storageBadge" class="db-path" title="Veri dosyası">db.json</div>
+
+      <div class="sidebar-section">
+        <span>Tablolar (Collections)</span>
+      </div>
+
+      <div id="collectionsList" class="collection-list"></div>
+
+      <div class="sidebar-footer">
+        <button onclick="openModal('seedModal')">
+          <span>+ Tablo / Veri Üret</span>
+          <span style="color:var(--text-dim)">Şema</span>
+        </button>
+        <button onclick="resetDatabase()">
+          <span>Verileri Sıfırla</span>
+          <span style="color:var(--text-dim)">Reset</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Workspace -->
+    <div class="workspace">
+      <!-- Top Bar -->
+      <header class="topbar">
+        <div class="nav-tabs">
+          <button id="tabBtnRecords" class="nav-tab active" onclick="switchView('records')">
+            Tablo Verileri
+          </button>
+          <button id="tabBtnRest" class="nav-tab" onclick="switchView('rest')">
+            REST İstemcisi
+          </button>
+          <button id="tabBtnNetwork" class="nav-tab" onclick="switchView('network')">
+            Ağ & Kaos (<span id="logCountLabel">0</span>)
+          </button>
+          <button id="tabBtnSdk" class="nav-tab" onclick="switchView('sdk')">
+            TypeScript & cURL
+          </button>
+        </div>
+
+        <div class="topbar-right">
+          <div id="chaosStatusPill" class="status-pill" onclick="switchView('network')" title="Ağ gecikmesi ve hata simülasyonu">
+            Ağ: Normal (0ms)
+          </div>
+          <a href="/demo" target="_blank" class="demo-link">
+            Örnek Mağaza (Frontend Test) ↗
+          </a>
+        </div>
+      </header>
+
+      <!-- VIEW 1: RECORDS (PocketBase style table browser) -->
+      <section id="viewRecords" class="view-pane active">
+        <div class="subbar">
+          <div class="subbar-left">
+            <div class="endpoint-box">
+              <span>GET</span>
+              <strong id="activeQueryUrl">/api/products</strong>
+            </div>
+            <input id="tableSearchInput" type="text" class="search-input" placeholder="Tabloda ara (?q=...)" oninput="onTableSearch()" />
+            <span id="tableTotalCount" style="color:var(--text-muted); font-size:12px;"></span>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button onclick="loadTableRecords()">Yenile</button>
+            <button class="btn-primary" onclick="openNewRecordModal()">+ Yeni Kayıt</button>
+          </div>
+        </div>
+
+        <div class="table-wrap" id="tableContainer"></div>
+      </section>
+
+      <!-- VIEW 2: REST PLAYGROUND -->
+      <section id="viewRest" class="view-pane">
+        <div class="rest-split">
+          <div class="rest-col">
+            <div class="field-label">
+              <span>HTTP İsteği (Request)</span>
+              <button onclick="generateMockToken()" style="padding:2px 8px; font-size:11px;">Örnek JWT Token Al</button>
+            </div>
+            <div class="url-bar">
+              <select id="reqMethod" onchange="toggleReqBody()">
+                <option value="GET">GET</option>
+                <option value="POST">POST</option>
+                <option value="PATCH">PATCH</option>
+                <option value="PUT">PUT</option>
+                <option value="DELETE">DELETE</option>
+              </select>
+              <input id="reqPath" type="text" value="/api/products?_limit=10" onkeydown="if(event.key==='Enter') sendRestRequest()" />
+              <button class="btn-primary" onclick="sendRestRequest()">Gönder</button>
+            </div>
+
+            <div class="field-label">
+              <span>Authorization (Bearer Token — İsteğe Bağlı)</span>
+            </div>
+            <input id="reqToken" type="text" placeholder="Bearer token..." style="padding:6px 10px; font-family:var(--font-mono);" />
+
+            <div class="field-label">
+              <span>Request Body (JSON — POST / PATCH / PUT)</span>
+            </div>
+            <textarea id="reqBody" class="code-area">{"title": "Yeni Ürün", "price": 1450.0, "stock": 20}</textarea>
+          </div>
+
+          <div class="rest-col">
+            <div class="field-label">
+              <span>Sunucu Yanıtı (Response)</span>
+              <span id="restStatusBadge" style="font-family:var(--font-mono);">Hazır</span>
+            </div>
+            <pre id="restResponseBox" class="code-area" style="margin:0;"></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 3: NETWORK & CHAOS -->
+      <section id="viewNetwork" class="view-pane">
+        <div class="preset-strip">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:12px; color:var(--text-muted); font-weight:500;">Hazır Ağ Profilleri:</span>
+            <button onclick="applyChaosPreset('clean')">Normal (0ms / %0 Hata)</button>
+            <button onclick="applyChaosPreset('slow_3g')">Yavaş 3G (850ms ±250ms)</button>
+            <button onclick="applyChaosPreset('flaky')">Kararsız Ağ (%25 HTTP 503)</button>
+            <button onclick="applyChaosPreset('rate_limit')">429 Rate Limit (%100)</button>
+          </div>
+          <button onclick="clearLogs()">Logları Temizle</button>
+        </div>
+
+        <div class="chaos-panel">
+          <div class="control-box">
+            <div class="field-label">
+              <span>Yapay Gecikme (Latency)</span>
+              <strong id="delayLabel" style="font-family:var(--font-mono);">0 ms</strong>
+            </div>
+            <input id="delaySlider" type="range" min="0" max="3000" step="50" value="0" oninput="onChaosInput()" onchange="saveChaosConfig()" />
+          </div>
+
+          <div class="control-box">
+            <div class="field-label">
+              <span>Hata Oranı (Failure Rate)</span>
+              <strong id="errorRateLabel" style="font-family:var(--font-mono);">0%</strong>
+            </div>
+            <input id="errorRateSlider" type="range" min="0" max="100" step="5" value="0" oninput="onChaosInput()" onchange="saveChaosConfig()" />
+          </div>
+
+          <div class="control-box">
+            <div class="field-label"><span>Dönecek Hata Kodu</span></div>
+            <select id="errorStatusSelect" onchange="saveChaosConfig()" style="padding:5px;">
+              <option value="500">500 Internal Server Error</option>
+              <option value="503">503 Service Unavailable</option>
+              <option value="429">429 Too Many Requests</option>
+              <option value="401">401 Unauthorized</option>
+            </select>
+          </div>
+
+          <div class="control-box" style="justify-content:center; gap:10px;">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input id="authGuardCheck" type="checkbox" onchange="saveChaosConfig()" />
+              <span>Bearer Token Zorunlu Tut (401)</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input id="readOnlyCheck" type="checkbox" onchange="saveChaosConfig()" />
+              <span>Salt-Okunur Mod (Read-Only)</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-grid">
+            <thead>
+              <tr>
+                <th style="width:90px;">Saat</th>
+                <th style="width:80px;">Metot</th>
+                <th>İstek Yolu (Endpoint)</th>
+                <th style="width:90px;">Durum</th>
+                <th style="width:90px;">Süre</th>
+                <th style="width:160px;">Kaos Etkisi</th>
+              </tr>
+            </thead>
+            <tbody id="networkLogsBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- VIEW 4: TYPESCRIPT SDK & CURL -->
+      <section id="viewSdk" class="view-pane">
+        <div class="rest-split">
+          <div class="rest-col">
+            <div class="field-label">
+              <span>Otomatik TypeScript Interface & Fetch SDK</span>
+              <button onclick="copyText('tsCodeBox', this)">Kopyala</button>
+            </div>
+            <pre id="tsCodeBox" class="code-area"></pre>
+          </div>
+          <div class="rest-col">
+            <div class="field-label">
+              <span>Hazır cURL Komutları & OpenAPI</span>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <button onclick="copyText('curlCodeBox', this)">Kopyala</button>
+                <a href="/_admin/openapi.json" target="_blank" style="color:var(--accent); text-decoration:none;">openapi.json ↗</a>
+              </div>
+            </div>
+            <pre id="curlCodeBox" class="code-area"></pre>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- MODAL: NEW RECORD -->
+  <div id="newRecordModal" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <span>Yeni Kayıt Ekle (/api/<span id="modalColName">products</span>)</span>
+        <button onclick="closeModal('newRecordModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="field-label">JSON Verisi (`id` ve `createdAt` otomatik atanır)</div>
+        <textarea id="newRecordJson" class="code-area" style="height:180px;"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button onclick="closeModal('newRecordModal')">İptal</button>
+        <button class="btn-primary" onclick="submitNewRecord()">Kaydet</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: SEED / GENERATE TABLE -->
+  <div id="seedModal" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <span>Hazır Veri Paketi veya Yeni Tablo Üret</span>
+        <button onclick="closeModal('seedModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="field-label">Dil ve Kayıt Sayısı</div>
+        <div style="display:flex; gap:8px;">
+          <select id="seedLang" style="flex:1; padding:6px;">
+            <option value="tr">Türkçe Veri</option>
+            <option value="en">İngilizce Veri</option>
+          </select>
+          <input id="seedCount" type="number" value="12" min="1" max="100" style="width:90px; padding:6px;" />
+        </div>
+
+        <div class="field-label" style="margin-top:6px;">Hazır Şablonlar (Mevcut veriyi değiştirir)</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;">
+          <button onclick="seedPreset('ecommerce')">E-Ticaret</button>
+          <button onclick="seedPreset('saas')">SaaS / Görevler</button>
+          <button onclick="seedPreset('blog')">Blog & Yorum</button>
+        </div>
+
+        <div class="field-label" style="margin-top:8px;">Veya Özel Tablo Şeması Ekle</div>
+        <input id="customSchemaInput" type="text" placeholder="Örn: cars: brand, price:float, year:int" style="padding:7px 10px; font-family:var(--font-mono);" />
+      </div>
+      <div class="modal-footer">
+        <button onclick="closeModal('seedModal')">Kapat</button>
+        <button class="btn-primary" onclick="seedCustomSchema()">Özel Tabloyu Ekle</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentCollection = 'products';
+    let currentSortField = '';
+    let currentSortOrder = 'asc';
+    let currentRows = [];
+
+    function switchView(view) {
+      const map = {
+        records: ['tabBtnRecords', 'viewRecords'],
+        rest: ['tabBtnRest', 'viewRest'],
+        network: ['tabBtnNetwork', 'viewNetwork'],
+        sdk: ['tabBtnSdk', 'viewSdk'],
+      };
+      Object.keys(map).forEach(k => {
+        const [btnId, paneId] = map[k];
+        document.getElementById(btnId).classList.toggle('active', k === view);
+        document.getElementById(paneId).classList.toggle('active', k === view);
+      });
+      if (view === 'sdk') loadCodegen();
+      if (view === 'records') loadTableRecords();
+    }
+
+    async function fetchState() {
+      try {
+        const res = await fetch('/_admin/state');
+        const data = await res.json();
+
+        document.getElementById('versionBadge').textContent = 'v' + data.version;
+        document.getElementById('storageBadge').textContent = data.file_path;
+        document.getElementById('logCountLabel').textContent = data.stats.total_requests;
+
+        // Chaos Pill
+        const pill = document.getElementById('chaosStatusPill');
+        const c = data.chaos;
+        if (c.delay_ms > 0 || c.error_rate > 0 || c.require_auth || c.read_only) {
+          pill.className = 'status-pill warn';
+          pill.textContent = `Kaos Aktif: ${c.delay_ms}ms | %${c.error_rate} Hata`;
+        } else {
+          pill.className = 'status-pill';
+          pill.textContent = 'Ağ: Normal (0ms)';
+        }
+
+        if (document.activeElement.id !== 'delaySlider') {
+          document.getElementById('delaySlider').value = c.delay_ms;
+          document.getElementById('delayLabel').textContent = c.delay_ms + ' ms';
+        }
+        if (document.activeElement.id !== 'errorRateSlider') {
+          document.getElementById('errorRateSlider').value = c.error_rate;
+          document.getElementById('errorRateLabel').textContent = c.error_rate + '%';
+        }
+        document.getElementById('errorStatusSelect').value = c.error_status;
+        document.getElementById('authGuardCheck').checked = c.require_auth;
+        document.getElementById('readOnlyCheck').checked = c.read_only;
+
+        renderSidebarCollections(data.collections);
+        renderNetworkLogs(data.stats.recent_logs);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function renderSidebarCollections(cols) {
+      const box = document.getElementById('collectionsList');
+      if (!cols.length) {
+        box.innerHTML = `<div style="padding:10px; color:var(--text-dim);">Tablo yok</div>`;
+        return;
+      }
+      if (!cols.some(c => c.name === currentCollection)) {
+        currentCollection = cols[0].name;
+      }
+      box.innerHTML = cols.map(c => `
+        <div class="col-item ${c.name === currentCollection ? 'active' : ''}" data-col="${escapeHtml(c.name)}" onclick="selectCollection(this.dataset.col)">
+          <span>${escapeHtml(c.name)}</span>
+          <span class="col-count">${c.count}</span>
+        </div>
+      `).join('');
+    }
+
+    function selectCollection(name) {
+      currentCollection = name;
+      currentSortField = '';
+      document.getElementById('tableSearchInput').value = '';
+      document.getElementById('reqPath').value = `/api/${name}?_limit=10`;
+      loadTableRecords();
+      loadCodegen();
+      fetchState();
+    }
+
+    function buildTableUrl() {
+      const q = document.getElementById('tableSearchInput').value.trim();
+      const params = new URLSearchParams();
+      if (q) params.set('q', q);
+      if (currentSortField) {
+        params.set('_sort', currentSortField);
+        params.set('_order', currentSortOrder);
+      }
+      const qs = params.toString();
+      return `/api/${currentCollection}${qs ? '?' + qs : ''}`;
+    }
+
+    let searchTimer = null;
+    function onTableSearch() {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(loadTableRecords, 180);
+    }
+
+    function toggleColumnSort(field) {
+      if (currentSortField === field) {
+        currentSortOrder = currentSortOrder === 'asc' ? 'desc' : 'asc';
+      } else {
+        currentSortField = field;
+        currentSortOrder = 'asc';
+      }
+      loadTableRecords();
+    }
+
+    async function loadTableRecords() {
+      const url = buildTableUrl();
+      document.getElementById('activeQueryUrl').textContent = url;
+      const box = document.getElementById('tableContainer');
+      try {
+        const token = document.getElementById('reqToken').value.trim();
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+        const res = await fetch(url, { headers });
+        const total = res.headers.get('X-Total-Count');
+        document.getElementById('tableTotalCount').textContent = total ? `${total} kayıt` : '';
+
+        const data = await res.json();
+        if (!res.ok) {
+          box.innerHTML = `
+            <div style="padding:24px; color:#f87171; font-family:var(--font-mono); display:flex; flex-direction:column; gap:10px; align-items:flex-start;">
+              <div>HTTP ${res.status}: ${escapeHtml(JSON.stringify(data))}</div>
+              <div style="display:flex; gap:8px;">
+                <button onclick="loadTableRecords()">Tekrar Dene</button>
+                <button class="btn-primary" onclick="disableGuardsAndReload()">Kaos / Auth Kilidini Kapat ve Yenile</button>
+              </div>
+            </div>`;
+          fetchState();
+          return;
+        }
+        const rows = Array.isArray(data) ? data : [data];
+        currentRows = rows;
+        if (!rows.length) {
+          box.innerHTML = `<div style="padding:32px; color:var(--text-dim); text-align:center;">Kayıt bulunamadı.</div>`;
+          fetchState();
+          return;
+        }
+
+        const keys = Array.from(new Set(rows.flatMap(r => Object.keys(r))));
+        const ths = keys.map(k => {
+          const arrow = currentSortField === k ? (currentSortOrder === 'asc' ? ' ↑' : ' ↓') : '';
+          return `<th data-field="${escapeHtml(k)}" onclick="toggleColumnSort(this.dataset.field)">${escapeHtml(k)}${arrow}</th>`;
+        }).join('') + `<th style="width:70px; text-align:right;">İşlem</th>`;
+
+        const trs = rows.map(r => {
+          const tds = keys.map(k => {
+            const v = r[k];
+            if (v === null || v === undefined) return `<td class="val-null">-</td>`;
+            if (typeof v === 'boolean') return `<td class="${v ? 'val-bool-true' : 'val-bool-false'}">${v}</td>`;
+            if (typeof v === 'number') return `<td class="val-num">${v}</td>`;
+            if (typeof v === 'object') return `<td>${escapeHtml(JSON.stringify(v))}</td>`;
+            return `<td>${escapeHtml(String(v))}</td>`;
+          }).join('');
+          const delBtn = r.id !== undefined
+            ? `<button class="btn-danger" style="padding:2px 7px; font-size:11px;" data-id="${escapeHtml(String(r.id))}" onclick="deleteRecord(this.dataset.id)">Sil</button>`
+            : '';
+          return `<tr>${tds}<td style="text-align:right;">${delBtn}</td></tr>`;
+        }).join('');
+
+        box.innerHTML = `<table class="data-grid"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`;
+        if (rows[0]) {
+          const sample = { ...rows[0] };
+          delete sample.id;
+          delete sample.createdAt;
+          delete sample.updatedAt;
+          document.getElementById('reqBody').value = JSON.stringify(sample, null, 2);
+        }
+      } catch (e) {
+        box.innerHTML = `<div style="padding:24px; color:#f87171;">Hata: ${escapeHtml(e.message)}</div>`;
+      }
+      fetchState();
+    }
+
+    async function deleteRecord(id) {
+      const token = document.getElementById('reqToken').value.trim();
+      const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+      await fetch(`/api/${currentCollection}/${encodeURIComponent(String(id))}`, { method: 'DELETE', headers });
+      loadTableRecords();
+    }
+
+    function openNewRecordModal() {
+      document.getElementById('modalColName').textContent = currentCollection;
+      const sample = currentRows[0] ? { ...currentRows[0] } : { name: 'Örnek', price: 100 };
+      delete sample.id;
+      delete sample.createdAt;
+      delete sample.updatedAt;
+      document.getElementById('newRecordJson').value = JSON.stringify(sample, null, 2);
+      openModal('newRecordModal');
+    }
+
+    async function submitNewRecord() {
+      try {
+        const body = JSON.parse(document.getElementById('newRecordJson').value);
+        const token = document.getElementById('reqToken').value.trim();
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`/api/${currentCollection}`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+        });
+        if (res.ok) {
+          closeModal('newRecordModal');
+          loadTableRecords();
+        } else {
+          alert('Hata: ' + (await res.text()));
+        }
+      } catch (e) {
+        alert('Geçersiz JSON formatı: ' + e.message);
+      }
+    }
+
+    function toggleReqBody() {
+      const m = document.getElementById('reqMethod').value;
+      const bodyArea = document.getElementById('reqBody');
+      bodyArea.disabled = (m === 'GET' || m === 'DELETE');
+      bodyArea.style.opacity = bodyArea.disabled ? '0.45' : '1';
+    }
+
+    async function disableGuardsAndReload() {
+      await fetch('/_admin/config', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ delay_ms: 0, jitter_ms: 0, error_rate: 0, require_auth: false, read_only: false }),
+      });
+      await fetchState();
+      loadTableRecords();
+    }
+
+    async function sendRestRequest() {
+      const method = document.getElementById('reqMethod').value;
+      const path = document.getElementById('reqPath').value.trim();
+      const token = document.getElementById('reqToken').value.trim();
+      const badge = document.getElementById('restStatusBadge');
+      const out = document.getElementById('restResponseBox');
+
+      badge.textContent = 'Gönderiliyor...';
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const opts = { method, headers };
+      if (method === 'POST' || method === 'PUT' || method === 'PATCH') {
+        headers['Content-Type'] = 'application/json';
+        opts.body = document.getElementById('reqBody').value;
+      }
+      const t0 = performance.now();
+      try {
+        const res = await fetch(path, opts);
+        const dt = Math.round(performance.now() - t0);
+        const data = await res.json();
+        out.textContent = JSON.stringify(data, null, 2);
+        badge.textContent = `HTTP ${res.status} (${dt} ms)`;
+        badge.style.color = res.ok ? 'var(--success)' : 'var(--danger)';
+      } catch (e) {
+        out.textContent = e.message;
+        badge.textContent = 'Ağ Hatası';
+      }
+      fetchState();
+    }
+
+    async function generateMockToken() {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'ferdi@quickmock.dev', role: 'admin' }),
+      });
+      const data = await res.json();
+      document.getElementById('reqToken').value = data.access_token;
+      document.getElementById('restResponseBox').textContent = JSON.stringify(data, null, 2);
+      fetchState();
+    }
+
+    function renderNetworkLogs(logs) {
+      const tbody = document.getElementById('networkLogsBody');
+      if (!logs || !logs.length) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:24px; color:var(--text-dim);">Henüz API trafiği yok.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = logs.map(l => {
+        const q = l.query ? `?${l.query}` : '';
+        const stColor = l.status >= 500 ? '#f87171' : (l.status >= 400 ? '#fbbf24' : '#4ade80');
+        return `
+          <tr>
+            <td style="color:var(--text-dim);">${l.timestamp}</td>
+            <td style="font-weight:600;">${l.method}</td>
+            <td>${escapeHtml(l.path + q)}</td>
+            <td style="color:${stColor}; font-weight:600;">${l.status}</td>
+            <td>${l.duration_ms} ms</td>
+            <td style="color:var(--warn);">${l.chaos_tag || '-'}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function onChaosInput() {
+      document.getElementById('delayLabel').textContent = document.getElementById('delaySlider').value + ' ms';
+      document.getElementById('errorRateLabel').textContent = document.getElementById('errorRateSlider').value + '%';
+    }
+
+    async function saveChaosConfig() {
+      onChaosInput();
+      const payload = {
+        delay_ms: parseInt(document.getElementById('delaySlider').value, 10),
+        error_rate: parseFloat(document.getElementById('errorRateSlider').value),
+        error_status: parseInt(document.getElementById('errorStatusSelect').value, 10),
+        require_auth: document.getElementById('authGuardCheck').checked,
+        read_only: document.getElementById('readOnlyCheck').checked,
+      };
+      await fetch('/_admin/config', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      fetchState();
+    }
+
+    async function applyChaosPreset(preset) {
+      await fetch('/_admin/chaos-preset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preset }),
+      });
+      fetchState();
+    }
+
+    async function loadCodegen() {
+      const res = await fetch(`/_admin/codegen/${currentCollection}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      document.getElementById('tsCodeBox').textContent = data.typescript_sdk;
+      document.getElementById('curlCodeBox').textContent = data.curl;
+    }
+
+    async function seedPreset(preset) {
+      const lang = document.getElementById('seedLang').value;
+      const count = parseInt(document.getElementById('seedCount').value, 10) || 12;
+      await fetch('/_admin/seed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preset, lang, count, mode: 'replace' }),
+      });
+      closeModal('seedModal');
+      await fetchState();
+      document.getElementById('reqPath').value = `/api/${currentCollection}?_limit=10`;
+      loadTableRecords();
+      loadCodegen();
+    }
+
+    async function seedCustomSchema() {
+      const schema = document.getElementById('customSchemaInput').value.trim();
+      if (!schema) return;
+      const lang = document.getElementById('seedLang').value;
+      const count = parseInt(document.getElementById('seedCount').value, 10) || 12;
+      await fetch('/_admin/seed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schema, lang, count, mode: 'merge' }),
+      });
+      const colName = schema.split(':')[0].trim();
+      document.getElementById('customSchemaInput').value = '';
+      closeModal('seedModal');
+      selectCollection(colName);
+    }
+
+    async function resetDatabase() {
+      await fetch('/_admin/reset', { method: 'POST' });
+      loadTableRecords();
+    }
+
+    async function clearLogs() {
+      await fetch('/_admin/logs', { method: 'DELETE' });
+      fetchState();
+    }
+
+    function openModal(id) { document.getElementById(id).classList.add('open'); }
+    function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+    function copyText(id, btn) {
+      navigator.clipboard.writeText(document.getElementById(id).textContent);
+      if (btn) {
+        const orig = btn.textContent;
+        btn.textContent = 'Kopyalandı ✓';
+        setTimeout(() => { btn.textContent = orig; }, 1200);
+      }
+    }
+
+    function escapeHtml(str) {
+      return String(str).replace(/[&<>'"]/g, t => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[t] || t));
+    }
+
+    fetchState().then(loadTableRecords);
+    setInterval(fetchState, 2500);
+  </script>
+</body>
+</html>

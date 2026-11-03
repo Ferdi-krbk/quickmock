@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quickmock"
+dynamic = ["version"]
+description = "Zero-config instant mock REST API server with realistic data seeding, network chaos simulation, TypeScript SDK codegen, and live studio dashboard."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+authors = [
+  { name = "Ferdi Karabacak" },
+]
+dependencies = [
+  "fastapi>=0.100.0",
+  "uvicorn>=0.20.0",
+]
+keywords = [
+  "mock-server",
+  "rest-api",
+  "frontend",
+  "testing",
+  "chaos-engineering",
+  "json-server",
+  "openapi",
+  "typescript-codegen",
+]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Testing",
+  "Framework :: FastAPI",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.0.0",
+  "httpx>=0.24.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Ferdi-krbk/quickmock"
+Repository = "https://github.com/Ferdi-krbk/quickmock"
+Issues = "https://github.com/Ferdi-krbk/quickmock/issues"
+
+[project.scripts]
+quickmock = "quickmock.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["quickmock*"]
+
+[tool.setuptools.package-data]
+quickmock = ["static/*.html"]
+
+[tool.setuptools.dynamic]
+version = { attr = "quickmock.__version__" }

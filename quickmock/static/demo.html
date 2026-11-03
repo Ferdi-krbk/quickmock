@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TechStore — QuickMock Örnek Frontend Uygulaması</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --card: #161920;
+      --border: #262b36;
+      --text: #e5e7eb;
+      --muted: #8b92a2;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --danger: #dc2626;
+      --success: #16a34a;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+      --mono: "JetBrains Mono", Consolas, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* Top Network Telemetry Bar */
+    .telemetry-bar {
+      background: #12151b;
+      border-bottom: 1px solid var(--border);
+      padding: 8px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .telemetry-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-family: var(--mono);
+    }
+    .telemetry-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .chip-btn {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 4px 10px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .chip-btn:hover {
+      color: #fff;
+      border-color: #4b5563;
+      background: #1f2430;
+    }
+    .chip-btn.active {
+      color: #fff;
+      border-color: var(--primary);
+      background: rgba(37, 99, 235, 0.2);
+      font-weight: 600;
+    }
+
+    /* Header */
+    header {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .logo span {
+      font-weight: 400;
+      font-size: 13px;
+      color: var(--muted);
+      margin-left: 8px;
+    }
+
+    /* Main Grid */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+      display: grid;
+      grid-template-columns: 1fr 350px;
+      gap: 24px;
+    }
+
+    /* Filter Bar */
+    .filter-bar {
+      background: var(--card);
+      border: 1px solid var(--border);
+      padding: 12px;
+      margin-bottom: 16px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    input, select {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 7px 10px;
+      font-size: 13px;
+      outline: none;
+    }
+    input:focus, select:focus { border-color: #4b5563; }
+
+    button {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 7px 12px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    button:hover { background: #202530; }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-buy {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+      font-weight: 500;
+    }
+    .btn-buy:hover:not(:disabled) { background: var(--primary-hover); }
+
+    /* Product Cards */
+    .products-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 14px;
+    }
+    .product-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    .product-cat {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      display: flex;
+      justify-content: space-between;
+    }
+    .product-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+    .product-price {
+      font-family: var(--mono);
+      font-size: 16px;
+      font-weight: 700;
+      color: #60a5fa;
+    }
+    .product-meta {
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .card-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    /* Error, Loading & Notice Banners */
+    .state-banner {
+      background: var(--card);
+      border: 1px solid var(--border);
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .state-banner.error {
+      border-color: #7f1d1d;
+      background: #1c1113;
+      color: #fca5a5;
+    }
+    .state-banner.ok {
+      border-color: #14532d;
+      background: #0f1f15;
+      color: #86efac;
+    }
+
+    /* Side Panel */
+    .side-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .side-title {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .order-item {
+      padding: 9px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .order-item:last-child { border-bottom: none; }
+  </style>
+</head>
+<body>
+
+  <!-- Top Bar: Live API Telemetry & Quick Chaos Simulators -->
+  <div class="telemetry-bar">
+    <div class="telemetry-left">
+      <span style="color:var(--muted);">SON API İSTEĞİ:</span>
+      <span id="lastApiCall">GET /api/products</span>
+      <span id="lastApiStatus" style="color:#4ade80;">200 OK (0 ms)</span>
+    </div>
+    <div class="telemetry-right">
+      <span style="color:var(--muted); margin-right:4px;">Ağ Modu:</span>
+      <button id="modeClean" class="chip-btn active" onclick="setChaos('clean', 0, 0)">Normal Ağ (0ms)</button>
+      <button id="modeSlow" class="chip-btn" onclick="setChaos('slow', 900, 0)">Yavaş 3G (900ms)</button>
+      <button id="modeFlaky" class="chip-btn" onclick="setChaos('flaky', 150, 50)">%50 Sunucu Hatası (503)</button>
+      <a href="/" style="color:#60a5fa; text-decoration:none; margin-left:10px; font-family:var(--mono);">← Admin Paneline Dön</a>
+    </div>
+  </div>
+
+  <header>
+    <div class="logo">
+      TechStore <span>QuickMock REST API kullanan örnek Frontend</span>
+    </div>
+    <div id="statsSummary" style="font-family:var(--mono); font-size:12px; color:var(--muted);">
+      İstatistikler yükleniyor...
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- Left Column: Product Catalog -->
+    <main>
+      <div class="filter-bar">
+        <input id="searchBox" type="text" placeholder="Ürün ara (?q=...)" style="flex:1;" oninput="debouncedLoad()" />
+        <input id="maxPriceBox" type="number" placeholder="Maks Fiyat (?price_lte=)" style="width:165px;" oninput="debouncedLoad()" />
+        <select id="sortBox" onchange="loadProducts()">
+          <option value="id:desc">En Yeni (_sort=id:desc)</option>
+          <option value="price:asc">Fiyat: Artan (_sort=price:asc)</option>
+          <option value="price:desc">Fiyat: Azalan (_sort=price:desc)</option>
+        </select>
+        <button onclick="loadProducts()">Yenile</button>
+      </div>
+
+      <div id="feedbackBanner" style="display:none;"></div>
+      <div id="productsGrid" class="products-grid"></div>
+    </main>
+
+    <!-- Right Column: Add Product + Relational Orders Feed -->
+    <aside>
+      <div class="side-box">
+        <div class="side-title">
+          <span>Yeni Ürün Ekle</span>
+          <span style="font-family:var(--mono); font-size:11px; color:var(--muted);">POST /api/products</span>
+        </div>
+        <div class="form-group">
+          <input id="newTitle" type="text" placeholder="Ürün Adı (Örn: 27 inç IPS Monitör)" />
+          <div style="display:flex; gap:8px;">
+            <input id="newPrice" type="number" placeholder="Fiyat (₺)" style="flex:1;" />
+            <input id="newStock" type="number" placeholder="Stok" value="15" style="width:85px;" />
+          </div>
+          <input id="newCategory" type="text" placeholder="Kategori (Örn: Elektronik)" value="Elektronik" />
+          <button class="btn-buy" onclick="createProduct()" style="width:100%; margin-top:4px;">+ Ürünü API'ye Kaydet</button>
+        </div>
+      </div>
+
+      <div class="side-box">
+        <div class="side-title">
+          <span>Son Siparişler (İlişkisel Join)</span>
+          <span style="font-family:var(--mono); font-size:11px; color:var(--muted);">?_expand=user</span>
+        </div>
+        <div id="ordersList"></div>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    let timer = null;
+    let productsCache = {};
+    let usersCache = [];
+
+    function debouncedLoad() {
+      clearTimeout(timer);
+      timer = setTimeout(loadProducts, 200);
+    }
+
+    async function loadUsersCache() {
+      try {
+        const res = await fetch('/api/users');
+        if (res.ok) usersCache = await res.json();
+      } catch (e) {}
+    }
+
+    function logTelemetry(method, url, status, ms) {
+      document.getElementById('lastApiCall').textContent = `${method} ${url}`;
+      const st = document.getElementById('lastApiStatus');
+      st.textContent = `HTTP ${status} (${ms} ms)`;
+      st.style.color = status >= 400 ? '#f87171' : '#4ade80';
+    }
+
+    function showBanner(type, htmlContent) {
+      const banner = document.getElementById('feedbackBanner');
+      banner.style.display = 'flex';
+      banner.className = `state-banner ${type}`;
+      banner.innerHTML = htmlContent;
+    }
+
+    function hideBanner() {
+      document.getElementById('feedbackBanner').style.display = 'none';
+    }
+
+    async function syncChaosButtons() {
+      try {
+        const res = await fetch('/_admin/state');
+        if (!res.ok) return;
+        const st = await res.json();
+        const c = st.chaos;
+        document.getElementById('modeClean').classList.toggle('active', c.delay_ms === 0 && c.error_rate === 0);
+        document.getElementById('modeSlow').classList.toggle('active', c.delay_ms >= 500 && c.error_rate === 0);
+        document.getElementById('modeFlaky').classList.toggle('active', c.error_rate > 0);
+      } catch (e) {}
+    }
+
+    async function loadProducts(keepBanner = false) {
+      const q = document.getElementById('searchBox').value.trim();
+      const maxP = document.getElementById('maxPriceBox').value.trim();
+      const [sField, sOrder] = document.getElementById('sortBox').value.split(':');
+
+      const params = new URLSearchParams();
+      if (q) params.set('q', q);
+      if (maxP) params.set('price_lte', maxP);
+      params.set('_sort', sField);
+      params.set('_order', sOrder);
+
+      const url = `/api/products?${params.toString()}`;
+      const grid = document.getElementById('productsGrid');
+
+      if (!keepBanner) {
+        showBanner('', `<span style="font-family:var(--mono); color:var(--muted);">Yükleniyor: ${url} ...</span>`);
+      }
+
+      const t0 = performance.now();
+      try {
+        const res = await fetch(url);
+        const dt = Math.round(performance.now() - t0);
+        logTelemetry('GET', url, res.status, dt);
+
+        const data = await res.json();
+        if (!res.ok) {
+          const seedBtn = res.status === 404
+            ? `<button class="btn-buy" onclick="seedEcommerce()">E-Ticaret Verisini Yükle</button>`
+            : `<button class="btn-buy" onclick="setChaos('clean', 0, 0)">Normal Ağa Dön</button>`;
+          showBanner('error', `
+            <div>
+              <div style="font-weight:600;">API Hatası (HTTP ${res.status} — ${dt} ms)</div>
+              <div style="font-family:var(--mono); font-size:12px;">${escapeHtml(JSON.stringify(data))}</div>
+            </div>
+            <div style="display:flex; gap:8px; shrink:0;">
+              <button onclick="loadProducts()">Tekrar Dene</button>
+              ${seedBtn}
+            </div>
+          `);
+          return;
+        }
+
+        if (!keepBanner) hideBanner();
+        if (!data.length) {
+          grid.innerHTML = `<div style="grid-column:1/-1; color:var(--muted); padding:24px 0;">Aramanıza uygun ürün bulunamadı.</div>`;
+          return;
+        }
+
+        productsCache = {};
+        grid.innerHTML = data.map(p => {
+          const idStr = String(p.id);
+          productsCache[idStr] = p;
+          const title = p.title || p.name || ('Ürün #' + idStr);
+          const priceVal = Number(p.price || 0);
+          const priceStr = priceVal.toLocaleString('tr-TR', { minimumFractionDigits: 2 });
+          const stock = p.stock !== undefined ? Number(p.stock) : 10;
+          const cat = p.category || 'Genel';
+          const sku = p.sku || `PRD-${1000 + Number(p.id || 1)}`;
+          return `
+            <div class="product-card">
+              <div>
+                <div class="product-cat">
+                  <span>${escapeHtml(cat)}</span>
+                  <span style="font-family:var(--mono);">${escapeHtml(sku)}</span>
+                </div>
+                <div class="product-title">${escapeHtml(title)}</div>
+              </div>
+              <div>
+                <div class="product-meta">
+                  <span class="product-price">₺${priceStr}</span>
+                  <span>Stok: <strong>${stock}</strong></span>
+                </div>
+                <div class="card-actions">
+                  <button class="btn-buy" style="flex:1;" ${stock <= 0 ? 'disabled' : ''}
+                    data-id="${escapeHtml(idStr)}" onclick="buyProductById(this.dataset.id)">
+                    ${stock > 0 ? 'Sipariş Ver' : 'Stokta Yok'}
+                  </button>
+                  <button data-id="${escapeHtml(idStr)}" onclick="deleteProductById(this.dataset.id)" title="Ürünü Sil">Sil</button>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (e) {
+        showBanner('error', `<span>Ağ bağlantı hatası: ${escapeHtml(e.message)}</span><button onclick="loadProducts()">Tekrar Dene</button>`);
+      }
+      loadStats();
+    }
+
+    async function loadStats() {
+      try {
+        const res = await fetch('/api/products/_stats');
+        if (!res.ok) return;
+        const st = await res.json();
+        const pStats = st.numeric_fields && st.numeric_fields.price;
+        if (pStats) {
+          document.getElementById('statsSummary').textContent =
+            `Toplam ${st.total_records} ürün | Ort. Fiyat: ₺${pStats.avg} | En Düşük: ₺${pStats.min} | En Yüksek: ₺${pStats.max}`;
+        }
+      } catch (e) {}
+    }
+
+    async function loadOrders() {
+      const box = document.getElementById('ordersList');
+      try {
+        const res = await fetch('/api/orders?_expand=user&_sort=id&_order=desc&_limit=6');
+        if (!res.ok) return;
+        const orders = await res.json();
+        if (!orders.length) {
+          box.innerHTML = `<div style="color:var(--muted); font-size:12px;">Henüz sipariş yok.</div>`;
+          return;
+        }
+        box.innerHTML = orders.map(o => {
+          const buyer = (o.user && o.user.name) ? o.user.name : (o.customerName || `Kullanıcı #${o.user_id || 1}`);
+          const amount = Number(o.totalAmount !== undefined ? o.totalAmount : (o.total || 0));
+          const totalStr = amount.toLocaleString('tr-TR', { minimumFractionDigits: 2 });
+          const ordNo = o.orderNumber || `ORD-${o.id}`;
+          return `
+            <div class="order-item">
+              <div>
+                <div style="font-weight:500;">${escapeHtml(ordNo)} — ${escapeHtml(buyer)}</div>
+                <div style="color:var(--muted); font-size:11px;">Durum: ${escapeHtml(o.status || 'processing')}</div>
+              </div>
+              <div style="font-family:var(--mono); font-weight:600; color:#4ade80;">₺${totalStr}</div>
+            </div>
+          `;
+        }).join('');
+      } catch (e) {}
+    }
+
+    async function createProduct() {
+      const title = document.getElementById('newTitle').value.trim();
+      const price = parseFloat(document.getElementById('newPrice').value) || 950.0;
+      const stock = parseInt(document.getElementById('newStock').value, 10) || 10;
+      const category = document.getElementById('newCategory').value.trim() || 'Elektronik';
+      if (!title) return alert('Lütfen ürün adı girin.');
+
+      const randNum = Math.floor(Math.random() * 899) + 100;
+      const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      const payload = {
+        sku: `PRD-1${randNum}`,
+        title,
+        slug: slug || `urun-${randNum}`,
+        category,
+        price,
+        currency: 'TRY',
+        stock,
+        inStock: stock > 0,
+        rating: 4.8,
+      };
+
+      const t0 = performance.now();
+      const res = await fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const dt = Math.round(performance.now() - t0);
+      logTelemetry('POST', '/api/products', res.status, dt);
+
+      if (res.ok) {
+        const created = await res.json();
+        document.getElementById('newTitle').value = '';
+        document.getElementById('newPrice').value = '';
+        showBanner('ok', `<span>✓ Yeni ürün eklendi: <strong>${escapeHtml(created.title)}</strong> (ID: #${created.id})</span>`);
+        loadProducts(true);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showBanner('error', `<span>Ürün eklenemedi (HTTP ${res.status}): ${escapeHtml(JSON.stringify(err))}</span>`);
+      }
+    }
+
+    async function buyProductById(idStr) {
+      const p = productsCache[String(idStr)];
+      if (!p) return;
+      const productId = p.id;
+      const price = Number(p.price || 100);
+      const currentStock = p.stock !== undefined ? Number(p.stock) : 10;
+      const productTitle = p.title || p.name || ('Ürün #' + idStr);
+
+      const chosenUser = usersCache.length
+        ? usersCache[Math.floor(Math.random() * usersCache.length)]
+        : { id: 1, name: 'Ahmet Yılmaz' };
+      const ordRand = Math.floor(Math.random() * 8999) + 1000;
+      const payload = {
+        orderNumber: `ORD-20${ordRand}`,
+        user_id: chosenUser.id,
+        product_id: productId,
+        customerName: chosenUser.name || `Müşteri #${chosenUser.id}`,
+        quantity: 1,
+        totalAmount: price,
+        status: 'processing',
+      };
+
+      const t0 = performance.now();
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const dt = Math.round(performance.now() - t0);
+      logTelemetry('POST', '/api/orders', res.status, dt);
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        showBanner('error', `
+          <div>
+            <strong>Sipariş Başarısız Oldu (HTTP ${res.status} — ${dt} ms)</strong>
+            <div style="font-family:var(--mono); font-size:12px;">${escapeHtml(JSON.stringify(err))}</div>
+          </div>
+          <button data-id="${escapeHtml(String(idStr))}" onclick="buyProductById(this.dataset.id)">Tekrar Dene</button>
+        `);
+        return;
+      }
+
+      const createdOrder = await res.json();
+      if (currentStock > 0) {
+        const newStock = Math.max(0, currentStock - 1);
+        await fetch(`/api/products/${encodeURIComponent(String(productId))}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stock: newStock, inStock: newStock > 0 }),
+        });
+      }
+
+      showBanner('ok', `<span>✓ Sipariş oluşturuldu: <strong>${escapeHtml(createdOrder.orderNumber)}</strong> — ${escapeHtml(productTitle)} (₺${Number(price).toLocaleString('tr-TR')})</span>`);
+      loadProducts(true);
+      loadOrders();
+    }
+
+    async function deleteProductById(idStr) {
+      const t0 = performance.now();
+      const url = `/api/products/${encodeURIComponent(String(idStr))}`;
+      const res = await fetch(url, { method: 'DELETE' });
+      const dt = Math.round(performance.now() - t0);
+      logTelemetry('DELETE', url, res.status, dt);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        showBanner('error', `<span>Silme işlemi başarısız (HTTP ${res.status}): ${escapeHtml(JSON.stringify(err))}</span>`);
+        return;
+      }
+      showBanner('ok', `<span>✓ Ürün #${escapeHtml(String(idStr))} silindi.</span>`);
+      loadProducts(true);
+    }
+
+    async function setChaos(mode, delay_ms, error_rate) {
+      await fetch('/_admin/config', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ delay_ms, jitter_ms: 0, error_rate, error_status: 503, require_auth: false, read_only: false }),
+      });
+      await syncChaosButtons();
+      loadProducts();
+      loadOrders();
+    }
+
+    async function seedEcommerce() {
+      await fetch('/_admin/seed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preset: 'ecommerce', lang: 'tr', count: 12, mode: 'replace' }),
+      });
+      loadProducts();
+      loadOrders();
+    }
+
+    function escapeHtml(str) {
+      return String(str).replace(/[&<>'"]/g, t => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[t] || t));
+    }
+
+    syncChaosButtons();
+    loadUsersCache().then(() => {
+      loadProducts();
+      loadOrders();
+    });
+  </script>
+</body>
+</html>
