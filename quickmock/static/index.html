@@ -919,7 +919,11 @@
     async function deleteRecord(id) {
       const token = document.getElementById('reqToken').value.trim();
       const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-      await fetch(`/api/${currentCollection}/${encodeURIComponent(String(id))}`, { method: 'DELETE', headers });
+      const res = await fetch(`/api/${currentCollection}/${encodeURIComponent(String(id))}`, { method: 'DELETE', headers });
+      if (!res.ok) {
+        alert('Silinemedi: ' + await res.text());
+        return;
+      }
       loadTableRecords();
     }
 
@@ -1078,11 +1082,15 @@
     async function seedPreset(preset) {
       const lang = document.getElementById('seedLang').value;
       const count = parseInt(document.getElementById('seedCount').value, 10) || 12;
-      await fetch('/_admin/seed', {
+      const res = await fetch('/_admin/seed', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ preset, lang, count, mode: 'replace' }),
       });
+      if (!res.ok) {
+        alert('Veri oluşturulamadı: ' + await res.text());
+        return;
+      }
       closeModal('seedModal');
       await fetchState();
       document.getElementById('reqPath').value = `/api/${currentCollection}?_limit=10`;
@@ -1095,19 +1103,28 @@
       if (!schema) return;
       const lang = document.getElementById('seedLang').value;
       const count = parseInt(document.getElementById('seedCount').value, 10) || 12;
-      await fetch('/_admin/seed', {
+      const res = await fetch('/_admin/seed', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ schema, lang, count, mode: 'merge' }),
       });
+      if (!res.ok) {
+        alert('Veri oluşturulamadı: ' + await res.text());
+        return;
+      }
       const colName = schema.split(':')[0].trim();
       document.getElementById('customSchemaInput').value = '';
       closeModal('seedModal');
+      await fetchState();
       selectCollection(colName);
     }
 
     async function resetDatabase() {
-      await fetch('/_admin/reset', { method: 'POST' });
+      const res = await fetch('/_admin/reset', { method: 'POST' });
+      if (!res.ok) {
+        alert('Veriler sıfırlanamadı: ' + await res.text());
+        return;
+      }
       loadTableRecords();
     }
 

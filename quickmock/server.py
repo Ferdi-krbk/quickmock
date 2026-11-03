@@ -10,13 +10,14 @@ import math
 import random
 import time
 from collections import deque
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from . import __version__, seeder
@@ -95,7 +96,10 @@ def _verify_mock_jwt(token: str) -> dict[str, Any] | None:
 def _strict_int(val: Any, name: str) -> int:
     if isinstance(val, bool) or val is None:
         raise ValueError(f"'{name}' must be an integer, got {type(val).__name__}")
-    return int(val)
+    result = int(val)
+    if isinstance(val, float) and val != result:
+        raise ValueError(f"'{name}' must be an integer")
+    return result
 
 
 def _strict_float(val: Any, name: str) -> float:
@@ -153,12 +157,14 @@ def create_app(
     if store is None:
         store = DataStore(seeder.generate_preset("ecommerce", count=12, lang="tr"))
     if chaos is None:
-        chaos = ChaosConfig()
+        chaos = ChaosConfig(read_only=store.read_only)
+    store.read_only = chaos.read_only
 
     app = FastAPI(
         title="QuickMock API Server",
         version=__version__,
-        docs_url="/swagger",
+        docs_url=None,
+        openapi_url=None,
         redoc_url=None,
     )
 
@@ -168,6 +174,10 @@ def create_app(
     app.state.req_counter = 0
     app.state.chaos_errors_triggered = 0
 
+    @app.exception_handler(OSError)
+    async def storage_error(request: Request, exc: OSError):
+        return JSONResponse(status_code=507, content={"detail": "Storage operation failed; changes were not saved"})
+
     @app.middleware("http")
     async def chaos_and_inspector_middleware(request: Request, call_next):
         start_t = time.perf_counter()
@@ -176,6 +186,14 @@ def create_app(
         is_auth_login = path == "/api/auth/login"
         chaos_cfg: ChaosConfig = app.state.chaos
         chaos_tags: list[str] = []
+
+        # The mock API is intentionally cross-origin; the Studio control plane isn't.
+        if path.startswith("/_admin/"):
+            origin = request.headers.get("origin")
+            expected_origin = f"{request.url.scheme}://{request.url.netloc}"
+            if ((origin is not None and origin != expected_origin)
+                    or request.headers.get("sec-fetch-site") == "cross-site"):
+                return JSONResponse(status_code=403, content={"detail": "Studio admin endpoints require the same origin"})
 
         if is_api:
             # 1. Artificial Latency + Jitter Injection
@@ -268,6 +286,10 @@ def create_app(
         app_inst.state.logs.appendleft(entry)
 
     # --------------------------------------------------------- Dashboard UI & Demo App
+    @app.get("/swagger", include_in_schema=False)
+    async def swagger():
+        return get_swagger_ui_html(openapi_url="/_admin/openapi.json", title="QuickMock API")
+
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
     async def dashboard():
         html_path = STATIC_DIR / "index.html"
@@ -303,7 +325,7 @@ def create_app(
     @app.patch("/_admin/config", include_in_schema=False)
     async def update_chaos_config(request: Request):
         payload = await _read_json_dict(request)
-        c: ChaosConfig = app.state.chaos
+        c: ChaosConfig = replace(app.state.chaos)
         s: DataStore = app.state.store
         try:
             if "delay_ms" in payload:
@@ -330,9 +352,10 @@ def create_app(
                 c.require_auth = _strict_bool(payload["require_auth"], "require_auth")
             if "read_only" in payload:
                 c.read_only = _strict_bool(payload["read_only"], "read_only")
-                s.read_only = c.read_only
-        except (ValueError, TypeError) as ex:
+        except (ValueError, TypeError, OverflowError) as ex:
             raise HTTPException(status_code=400, detail=f"Invalid chaos configuration: {ex}")
+        app.state.chaos = c
+        s.read_only = c.read_only
         return asdict(c)
 
     @app.post("/_admin/chaos-preset", include_in_schema=False)
@@ -370,6 +393,10 @@ def create_app(
         schema_str = str(payload.get("schema", "")).strip()
 
         try:
+            if mode not in ("merge", "replace"):
+                raise ValueError("mode must be 'merge' or 'replace'")
+            if lang not in ("tr", "en"):
+                raise ValueError("lang must be 'tr' or 'en'")
             raw_count = payload.get("count", 12)
             count = _strict_int(raw_count, "count")
             if not (1 <= count <= 200):
@@ -383,7 +410,7 @@ def create_app(
                 counts = s.merge_collections(new_data)
             else:
                 counts = s.replace_all(new_data, update_snapshot=True)
-        except (ValueError, TypeError) as ex:
+        except (ValueError, TypeError, OverflowError) as ex:
             raise HTTPException(status_code=400, detail=str(ex))
         return {"status": "seeded", "collections": counts}
 
@@ -409,6 +436,7 @@ def create_app(
         app.state.chaos_errors_triggered = 0
         return {"status": "cleared"}
 
+    @app.get("/openapi.json", include_in_schema=False)
     @app.get("/_admin/openapi.json", include_in_schema=False)
     async def export_openapi(request: Request):
         s: DataStore = app.state.store
@@ -463,7 +491,10 @@ def create_app(
         s: DataStore = app.state.store
         if not s.has_collection(collection):
             raise HTTPException(status_code=404, detail=f"Collection '{collection}' not found")
-        return s.collection_stats(collection)
+        try:
+            return s.collection_stats(collection)
+        except ValueError as ex:
+            raise HTTPException(status_code=400, detail=str(ex))
 
     @app.post("/api/{collection}/_bulk", status_code=201)
     async def bulk_create_collection_items(collection: str, request: Request):

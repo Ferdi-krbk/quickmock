@@ -31,6 +31,16 @@ When building a frontend application (React, Next.js, Vue, Svelte, Flutter) or r
 
 ## Installation
 
+QuickMock is a **local development tool**. Mock login accepts arbitrary credentials
+and uses a public development signing key; it is not production authentication.
+Keep the default loopback binding and use generated test data. Studio admin
+endpoints require same-origin browser access; cross-origin frontends can still
+use `/api/*`. Read-only mode guards mock API writes; Studio controls can reset
+or seed data deliberately.
+
+Recent fixes are listed in the [changelog](CHANGELOG.md). The generated TypeScript
+SDK infers types from up to 50 records; cURL snippets target POSIX shells.
+
 ```bash
 git clone https://github.com/Ferdi-krbk/quickmock.git
 cd quickmock
