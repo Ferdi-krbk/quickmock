@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -90,6 +91,15 @@ def main(argv: list[str] | None = None) -> int:
     if not (400 <= args.error_status <= 599):
         print(f"error: --error-status must be between 400 and 599, got {args.error_status}", file=sys.stderr)
         return 2
+    if args.delay < 0 or args.jitter < 0 or not math.isfinite(args.error_rate) or not 0 <= args.error_rate <= 100:
+        print("error: latency must be non-negative and --error-rate must be finite and between 0 and 100", file=sys.stderr)
+        return 2
+    if args.export_openapi and args.file:
+        source = Path(args.file).resolve()
+        target = Path(args.export_openapi).resolve()
+        if target == source or (target.exists() and source.exists() and target.samefile(source)):
+            print("error: OpenAPI output must not overwrite the source database", file=sys.stderr)
+            return 2
 
     try:
         store = load_or_init_store(
@@ -108,7 +118,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.export_openapi:
         out_path = Path(args.export_openapi)
         spec = store.generate_openapi(base_url=base_url)
-        out_path.write_text(json.dumps(spec, indent=2, ensure_ascii=False), encoding="utf-8")
+        try:
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(json.dumps(spec, indent=2, ensure_ascii=False), encoding="utf-8")
+        except OSError as ex:
+            print(f"error writing OpenAPI: {ex}", file=sys.stderr)
+            return 2
         print(f"OpenAPI 3.0 specification written to {out_path}")
         return 0
 

@@ -4,8 +4,12 @@ from __future__ import annotations
 import copy
 import json
 import math
+import os
 import re
+import shlex
+import tempfile
 import threading
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -18,7 +22,7 @@ RESERVED_ITEM_IDS = {"_stats", "_bulk"}
 
 
 def validate_collection_name(name: str) -> str:
-    if not isinstance(name, str) or not COLLECTION_NAME_RE.match(name) or name.lower() in RESERVED_COLLECTIONS:
+    if not isinstance(name, str) or not COLLECTION_NAME_RE.fullmatch(name) or name.lower() in RESERVED_COLLECTIONS:
         raise ValueError(f"Invalid or reserved collection name: '{name}'")
     return name
 
@@ -33,7 +37,7 @@ def validate_item_id(raw_id: Any) -> int | str:
         return raw_id
     if isinstance(raw_id, str):
         s = raw_id.strip()
-        if not ITEM_ID_STR_RE.match(s) or s in RESERVED_ITEM_IDS:
+        if not ITEM_ID_STR_RE.fullmatch(s) or s in RESERVED_ITEM_IDS:
             raise ValueError(f"Reserved or invalid item id: '{raw_id}'")
         return s
     raise ValueError(f"Item 'id' must be a positive integer or URL-safe string, got {type(raw_id).__name__}")
@@ -99,12 +103,16 @@ def _values_equal(row_val: Any, query_raw: str) -> bool:
         return isinstance(coerced, bool) and row_val is coerced
     if isinstance(row_val, (int, float)) and not isinstance(row_val, bool):
         if isinstance(coerced, (int, float)) and not isinstance(coerced, bool):
-            return float(row_val) == float(coerced)
+            return row_val == coerced
         return False
     return str(row_val).lower() == query_raw.lower()
 
 
 def _parse_query_float(param_name: str, raw: str) -> float:
+    try:
+        return int(raw)
+    except ValueError:
+        pass
     try:
         val = float(raw)
     except ValueError:
@@ -117,7 +125,9 @@ def _parse_query_float(param_name: str, raw: str) -> float:
 def _row_float(val: Any) -> float | None:
     if isinstance(val, bool) or val is None:
         return None
-    if isinstance(val, (int, float)):
+    if isinstance(val, int):
+        return val
+    if isinstance(val, float):
         f = float(val)
         return f if math.isfinite(f) else None
     try:
@@ -132,8 +142,7 @@ def _safe_sort_key(val: Any) -> tuple[int, float, str]:
     if isinstance(val, bool):
         return (0, 1.0 if val else 0.0, "")
     if isinstance(val, (int, float)):
-        f = float(val)
-        return (1, f if math.isfinite(f) else 0.0, "")
+        return (1, val, "")
     return (2, 0.0, str(val).lower())
 
 
@@ -167,6 +176,64 @@ def _pascal_case(name: str) -> str:
     return ident
 
 
+def _typescript_type(value: Any) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, (int, float)):
+        return "number"
+    if isinstance(value, list):
+        members = sorted({_typescript_type(v) for v in value})
+        if not members:
+            return "unknown[]"
+        return f"({' | '.join(members)})[]" if len(members) > 1 else f"{members[0]}[]"
+    if isinstance(value, dict):
+        return "Record<string, unknown>"
+    return "string"
+
+
+def _openapi_schema(values: list[Any]) -> dict[str, Any]:
+    """Infer JSON-compatible schemas, retaining nulls and mixed array types."""
+    alternatives: dict[str, dict[str, Any]] = {}
+    for value in values:
+        if value is None:
+            continue
+        if isinstance(value, bool):
+            kind = "boolean"
+        elif isinstance(value, int):
+            kind = "integer"
+        elif isinstance(value, float):
+            kind = "number"
+        elif isinstance(value, list):
+            kind = "array"
+        elif isinstance(value, dict):
+            kind = "object"
+        else:
+            kind = "string"
+        alternatives[kind] = {"type": kind}
+    if "number" in alternatives:
+        alternatives.pop("integer", None)
+    if "array" in alternatives:
+        elements = [element for value in values if isinstance(value, list) for element in value]
+        alternatives["array"]["items"] = _openapi_schema(elements) if elements else {}
+    if "object" in alternatives:
+        fields: dict[str, list[Any]] = {}
+        for value in values:
+            if isinstance(value, dict):
+                for key, item in value.items():
+                    fields.setdefault(key, []).append(item)
+        alternatives["object"]["properties"] = {k: _openapi_schema(v) for k, v in fields.items()}
+    schemas = list(alternatives.values()) or [{"type": "string"}]
+    if any(value is None for value in values):
+        for schema in schemas:
+            schema["nullable"] = True
+    result = schemas[0] if len(schemas) == 1 else {"anyOf": schemas}
+    if values:
+        result["example"] = copy.deepcopy(values[0])
+    return result
+
+
 def _normalize_and_validate_dataset(data: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
     if not isinstance(data, dict):
         raise ValueError("Dataset must be a JSON object mapping collection names to arrays of objects")
@@ -177,6 +244,15 @@ def _normalize_and_validate_dataset(data: dict[str, list[dict[str, Any]]]) -> di
             raise ValueError(f"Collection '{col}' must be a JSON array")
         norm_rows: list[dict[str, Any]] = []
         seen_ids: set[str] = set()
+        explicit_ids: set[str] = set()
+        for r in rows:
+            if isinstance(r, dict) and r.get("id") is not None and r.get("id") != "":
+                if isinstance(r["id"], str) and not r["id"].strip():
+                    continue
+                key = str(validate_item_id(r["id"]))
+                if key in explicit_ids:
+                    raise ValueError(f"Duplicate id '{r['id']}' in collection '{col}'")
+                explicit_ids.add(key)
         for idx, r in enumerate(rows):
             if not isinstance(r, dict):
                 raise ValueError(f"Collection '{col}' item at index {idx} must be a JSON object")
@@ -184,7 +260,7 @@ def _normalize_and_validate_dataset(data: dict[str, list[dict[str, Any]]]) -> di
             item = copy.deepcopy(r)
             if "id" not in item or item["id"] is None or (isinstance(item["id"], str) and not item["id"].strip()):
                 next_id = idx + 1
-                while str(next_id) in seen_ids:
+                while str(next_id) in seen_ids or str(next_id) in explicit_ids:
                     next_id += 1
                 item = {"id": next_id, **{k: v for k, v in item.items() if k != "id"}}
             else:
@@ -217,32 +293,51 @@ class DataStore:
         if not self.file_path or (self.read_only and not force):
             return
         self.file_path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self.file_path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(self._data, indent=2, ensure_ascii=False, allow_nan=False), encoding="utf-8")
-        tmp.replace(self.file_path)
+        tmp = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=self.file_path.parent,
+                                             prefix=f".{self.file_path.name}.", suffix=".tmp", delete=False) as handle:
+                tmp = Path(handle.name)
+                json.dump(self._data, handle, indent=2, ensure_ascii=False, allow_nan=False)
+            os.replace(tmp, self.file_path)
+        finally:
+            if tmp is not None:
+                tmp.unlink(missing_ok=True)
+
+    @contextmanager
+    def _transaction(self, force: bool = False):
+        """Keep memory and the reset snapshot consistent when persistence fails."""
+        with self._lock:
+            previous = copy.deepcopy(self._data)
+            snapshot = self._initial_snapshot
+            try:
+                yield
+                if self._data != previous:
+                    self._persist(force=force)
+            except Exception:
+                self._data = previous
+                self._initial_snapshot = snapshot
+                raise
 
     def reset(self) -> dict[str, int]:
         """Restore store to initial snapshot."""
-        with self._lock:
+        with self._transaction(force=True):
             self._data = copy.deepcopy(self._initial_snapshot)
-            self._persist(force=True)
             return {k: len(v) for k, v in self._data.items()}
 
     def replace_all(self, new_data: dict[str, list[dict[str, Any]]], update_snapshot: bool = True) -> dict[str, int]:
         clean_data = _normalize_and_validate_dataset(new_data)
-        with self._lock:
+        with self._transaction(force=True):
             self._data = copy.deepcopy(clean_data)
             if update_snapshot:
                 self._initial_snapshot = copy.deepcopy(clean_data)
-            self._persist(force=True)
             return {k: len(v) for k, v in self._data.items()}
 
     def merge_collections(self, extra_data: dict[str, list[dict[str, Any]]]) -> dict[str, int]:
         clean_extra = _normalize_and_validate_dataset(extra_data)
-        with self._lock:
+        with self._transaction(force=True):
             for col, rows in clean_extra.items():
                 self._data[col] = copy.deepcopy(rows)
-            self._persist(force=True)
             return {k: len(v) for k, v in self._data.items()}
 
     def collections_summary(self) -> list[dict[str, Any]]:
@@ -254,7 +349,7 @@ class DataStore:
                     "name": name,
                     "count": len(rows),
                     "fields": sample_keys,
-                    "sample": rows[0] if rows else None,
+                    "sample": copy.deepcopy(rows[0]) if rows else None,
                 })
             return out
 
@@ -263,11 +358,10 @@ class DataStore:
             return collection in self._data
 
     def delete_collection(self, collection: str) -> bool:
-        with self._lock:
+        with self._transaction(force=True):
             if collection not in self._data:
                 return False
             del self._data[collection]
-            self._persist(force=True)
             return True
 
     def collection_stats(self, collection: str) -> dict[str, Any]:
@@ -276,22 +370,29 @@ class DataStore:
             rows = self._data.get(collection)
             if rows is None:
                 raise KeyError(collection)
-            numeric_buckets: dict[str, list[float]] = {}
+            numeric_buckets: dict[str, list[int | float]] = {}
             for r in rows:
                 for k, v in r.items():
                     if k == "id" or isinstance(v, bool):
                         continue
-                    if isinstance(v, (int, float)) and math.isfinite(float(v)):
-                        numeric_buckets.setdefault(k, []).append(float(v))
+                    if isinstance(v, int) or (isinstance(v, float) and math.isfinite(v)):
+                        numeric_buckets.setdefault(k, []).append(v)
 
             metrics: dict[str, Any] = {}
             for field, vals in numeric_buckets.items():
                 if vals:
+                    total = sum(vals)
+                    try:
+                        average = total / len(vals)
+                    except OverflowError:
+                        raise ValueError(f"Numeric aggregation overflow for '{field}'")
+                    if not math.isfinite(average) or (isinstance(total, float) and not math.isfinite(total)):
+                        raise ValueError(f"Numeric aggregation overflow for '{field}'")
                     metrics[field] = {
                         "min": round(min(vals), 2),
                         "max": round(max(vals), 2),
-                        "avg": round(sum(vals) / len(vals), 2),
-                        "sum": round(sum(vals), 2),
+                        "avg": round(average, 2),
+                        "sum": round(total, 2),
                         "count": len(vals),
                     }
             return {
@@ -535,21 +636,20 @@ class DataStore:
 
     def create(self, collection: str, payload: dict[str, Any]) -> dict[str, Any]:
         validate_collection_name(collection)
-        with self._lock:
+        with self._transaction():
             if collection not in self._data:
                 self._data[collection] = []
             rows = self._data[collection]
             seen_ids = {str(r.get("id")) for r in rows if "id" in r}
             item = self._prepare_new_item(rows, payload, seen_ids)
             rows.append(item)
-            self._persist()
             return copy.deepcopy(item)
 
     def create_bulk(self, collection: str, payloads: list[dict[str, Any]]) -> list[dict[str, Any]]:
         validate_collection_name(collection)
         if not isinstance(payloads, list) or not (1 <= len(payloads) <= 500):
             raise ValueError("Bulk payload must be a JSON array of 1 to 500 objects")
-        with self._lock:
+        with self._transaction():
             existing_rows = self._data.get(collection, [])
             working_rows = list(existing_rows)
             seen_ids = {str(r.get("id")) for r in working_rows if "id" in r}
@@ -561,14 +661,13 @@ class DataStore:
                 working_rows.append(item)
                 created_items.append(copy.deepcopy(item))
             self._data[collection] = working_rows
-            self._persist()
             return created_items
 
     def replace(self, collection: str, item_id: str | int, payload: dict[str, Any]) -> dict[str, Any] | None:
         if not isinstance(payload, dict):
             raise ValueError("Record payload must be a JSON object")
         validate_json_values(payload)
-        with self._lock:
+        with self._transaction():
             rows = self._data.get(collection)
             if rows is None:
                 raise KeyError(collection)
@@ -578,7 +677,6 @@ class DataStore:
                     new_item = {"id": orig_id, **copy.deepcopy(payload)}
                     new_item["id"] = orig_id
                     rows[idx] = new_item
-                    self._persist()
                     return copy.deepcopy(new_item)
             return None
 
@@ -586,7 +684,7 @@ class DataStore:
         if not isinstance(payload, dict):
             raise ValueError("Record payload must be a JSON object")
         validate_json_values(payload)
-        with self._lock:
+        with self._transaction():
             rows = self._data.get(collection)
             if rows is None:
                 raise KeyError(collection)
@@ -596,19 +694,17 @@ class DataStore:
                     r.update(copy.deepcopy(payload))
                     r["id"] = orig_id
                     r["updatedAt"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-                    self._persist()
                     return copy.deepcopy(r)
             return None
 
     def delete(self, collection: str, item_id: str | int) -> bool:
-        with self._lock:
+        with self._transaction():
             rows = self._data.get(collection)
             if rows is None:
                 raise KeyError(collection)
             for idx, r in enumerate(rows):
                 if str(r.get("id")) == str(item_id):
                     rows.pop(idx)
-                    self._persist()
                     return True
             return False
 
@@ -626,28 +722,14 @@ class DataStore:
 
             field_types: dict[str, set[str]] = {}
             field_counts: dict[str, int] = {}
-            total_rows = len(rows)
+            total_rows = min(len(rows), 50)
 
             for r in rows[:50]:
                 if not isinstance(r, dict):
                     continue
                 for k, v in r.items():
                     field_counts[k] = field_counts.get(k, 0) + 1
-                    if v is None:
-                        t = "null"
-                    elif isinstance(v, bool):
-                        t = "boolean"
-                    elif isinstance(v, (int, float)):
-                        t = "number"
-                    elif isinstance(v, list):
-                        elem_t = "string"
-                        if v and isinstance(v[0], (int, float)) and not isinstance(v[0], bool):
-                            elem_t = "number"
-                        t = f"{elem_t}[]"
-                    elif isinstance(v, dict):
-                        t = "Record<string, unknown>"
-                    else:
-                        t = "string"
+                    t = _typescript_type(v)
                     field_types.setdefault(k, set()).add(t)
 
             if not field_types:
@@ -659,16 +741,16 @@ class DataStore:
             for k, tset in field_types.items():
                 opt = "?" if field_counts.get(k, 0) < total_rows else ""
                 union_t = " | ".join(sorted(tset))
-                prop_key = k if JS_IDENT_RE.match(k) else json.dumps(k)
+                prop_key = k if JS_IDENT_RE.fullmatch(k) else json.dumps(k)
                 ts_lines.append(f"  {prop_key}{opt}: {union_t};")
             ts_lines.append("}")
             interface_code = "\n".join(ts_lines)
 
             sdk_code = f"""{interface_code}
 
-const API_BASE = "{base_url}/api/{collection}";
+const API_BASE = {json.dumps(base_url.rstrip('/') + '/api/' + collection)};
 
-export async function list{plural_fn_name}(params?: Record<string, string | number>): Promise<{type_name}[]> {{
+export async function list{plural_fn_name}(params?: Record<string, string | number | boolean>): Promise<{type_name}[]> {{
   const qs = params ? "?" + new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])) : "";
   const res = await fetch(`${{API_BASE}}${{qs}}`);
   if (!res.ok) throw new Error(`HTTP ${{res.status}}: ${{await res.text()}}`);
@@ -676,7 +758,7 @@ export async function list{plural_fn_name}(params?: Record<string, string | numb
 }}
 
 export async function get{type_name}ById(id: number | string): Promise<{type_name}> {{
-  const res = await fetch(`${{API_BASE}}/${{id}}`);
+  const res = await fetch(`${{API_BASE}}/${{encodeURIComponent(String(id))}}`);
   if (!res.ok) throw new Error(`HTTP ${{res.status}}: ${{await res.text()}}`);
   return res.json();
 }}
@@ -692,7 +774,7 @@ export async function create{type_name}(payload: Omit<{type_name}, "id" | "creat
 }}
 
 export async function delete{type_name}(id: number | string): Promise<void> {{
-  const res = await fetch(`${{API_BASE}}/${{id}}`, {{ method: "DELETE" }});
+  const res = await fetch(`${{API_BASE}}/${{encodeURIComponent(String(id))}}`, {{ method: "DELETE" }});
   if (!res.ok) throw new Error(`HTTP ${{res.status}}: ${{await res.text()}}`);
 }}"""
 
@@ -703,18 +785,18 @@ export async function delete{type_name}(id: number | string): Promise<void> {{
             sample_json = json.dumps(sample_obj, ensure_ascii=False)
 
             curl_code = f"""# List with filtering, sorting & pagination
-curl -s "{base_url}/api/{collection}?_limit=5&_sort=id&_order=desc"
+curl -s {shlex.quote(f'{base_url}/api/{collection}?_limit=5&_sort=id&_order=desc')}
 
 # Get single record by ID
-curl -s "{base_url}/api/{collection}/1"
+curl -s {shlex.quote(f'{base_url}/api/{collection}/1')}
 
 # Create a new record
-curl -s -X POST "{base_url}/api/{collection}" \\
+curl -s -X POST {shlex.quote(f'{base_url}/api/{collection}')} \\
   -H "Content-Type: application/json" \\
-  -d '{sample_json}'
+  -d {shlex.quote(sample_json)}
 
 # Collection numeric stats
-curl -s "{base_url}/api/{collection}/_stats" """
+curl -s {shlex.quote(f'{base_url}/api/{collection}/_stats')} """
 
             return {
                 "collection": collection,
@@ -733,23 +815,14 @@ curl -s "{base_url}/api/{collection}/_stats" """
             for col, rows in self._data.items():
                 singular = _pascal_case(col)
                 props: dict[str, Any] = {}
-                sample = rows[0] if rows and isinstance(rows[0], dict) else {"id": 1, "name": "example"}
-                for k, v in sample.items():
-                    if isinstance(v, bool):
-                        props[k] = {"type": "boolean", "example": v}
-                    elif isinstance(v, int):
-                        props[k] = {"type": "integer", "example": v}
-                    elif isinstance(v, float):
-                        props[k] = {"type": "number", "example": v}
-                    elif isinstance(v, list):
-                        props[k] = {"type": "array", "items": {"type": "string"}, "example": v}
-                    elif isinstance(v, dict):
-                        props[k] = {"type": "object", "example": v}
-                    else:
-                        props[k] = {"type": "string", "example": str(v)}
+                field_values: dict[str, list[Any]] = {}
+                for row in rows[:50] or [{"id": 1, "name": "example"}]:
+                    for key, value in row.items():
+                        field_values.setdefault(key, []).append(value)
+                props = {key: _openapi_schema(values) for key, values in field_values.items()}
 
-                schemas[singular] = {"type": "object", "properties": props}
-                col_ref = f"#/components/schemas/{singular}"
+                schemas[col] = {"type": "object", "properties": props}
+                col_ref = f"#/components/schemas/{col}"
 
                 paths[f"/api/{col}"] = {
                     "get": {
@@ -794,12 +867,14 @@ curl -s "{base_url}/api/{collection}/_stats" """
                         "summary": f"Replace {singular}",
                         "tags": [col],
                         "parameters": [{"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                        "requestBody": {"required": True, "content": {"application/json": {"schema": {"$ref": col_ref}}}},
                         "responses": {"200": {"description": "Updated"}},
                     },
                     "patch": {
                         "summary": f"Update {singular}",
                         "tags": [col],
                         "parameters": [{"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                        "requestBody": {"required": True, "content": {"application/json": {"schema": {"$ref": col_ref}}}},
                         "responses": {"200": {"description": "Patched"}},
                     },
                     "delete": {
@@ -810,6 +885,29 @@ curl -s "{base_url}/api/{collection}/_stats" """
                     },
                 }
 
+                paths[f"/api/{col}/_bulk"] = {"post": {
+                    "summary": f"Bulk create {col}", "tags": [col],
+                    "requestBody": {"required": True, "content": {"application/json": {"schema": {
+                        "type": "array", "minItems": 1, "maxItems": 500, "items": {"$ref": col_ref},
+                    }}}},
+                    "responses": {"201": {"description": "Inserted records"}},
+                }}
+                paths[f"/api/{col}/_stats"] = {"get": {
+                    "summary": f"Numeric statistics for {col}", "tags": [col],
+                    "responses": {"200": {"description": "Collection numeric aggregates"}},
+                }}
+
+            paths["/api/auth/login"] = {"post": {
+                "summary": "Create a development-only mock token", "tags": ["auth"],
+                "requestBody": {"content": {"application/json": {"schema": {"type": "object"}}}},
+                "responses": {"200": {"description": "Mock bearer token"}},
+            }}
+            paths["/api/auth/me"] = {"get": {
+                "summary": "Inspect a mock token", "tags": ["auth"],
+                "security": [{"mockBearer": []}],
+                "responses": {"200": {"description": "Token claims"}, "401": {"description": "Invalid token"}},
+            }}
+
             return {
                 "openapi": "3.0.3",
                 "info": {
@@ -819,5 +917,7 @@ curl -s "{base_url}/api/{collection}/_stats" """
                 },
                 "servers": [{"url": base_url}],
                 "paths": paths,
-                "components": {"schemas": schemas},
+                "components": {"schemas": schemas, "securitySchemes": {
+                    "mockBearer": {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"},
+                }},
             }
