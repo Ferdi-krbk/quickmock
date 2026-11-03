@@ -493,10 +493,15 @@
 
     async function createProduct() {
       const title = document.getElementById('newTitle').value.trim();
-      const price = parseFloat(document.getElementById('newPrice').value) || 950.0;
-      const stock = parseInt(document.getElementById('newStock').value, 10) || 10;
+      const rawPrice = document.getElementById('newPrice').value.trim();
+      const rawStock = document.getElementById('newStock').value.trim();
+      const price = rawPrice === '' ? 950 : Number(rawPrice);
+      const stock = rawStock === '' ? 10 : Number(rawStock);
       const category = document.getElementById('newCategory').value.trim() || 'Elektronik';
       if (!title) return alert('Lütfen ürün adı girin.');
+      if (!Number.isFinite(price) || price < 0 || !Number.isSafeInteger(stock) || stock < 0) {
+        return alert('Fiyat sıfır veya pozitif, stok ise sıfır veya pozitif bir tam sayı olmalı.');
+      }
 
       const randNum = Math.floor(Math.random() * 899) + 100;
       const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -537,7 +542,7 @@
       const p = productsCache[String(idStr)];
       if (!p) return;
       const productId = p.id;
-      const price = Number(p.price || 100);
+      const price = p.price == null ? 100 : Number(p.price);
       const currentStock = p.stock !== undefined ? Number(p.stock) : 10;
       const productTitle = p.title || p.name || ('Ürün #' + idStr);
 

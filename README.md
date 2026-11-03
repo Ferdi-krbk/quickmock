@@ -191,6 +191,13 @@ usage: quickmock [-h] [--version] [--host HOST] [-p PORT]
 pytest -v
 ```
 
+The demo's zero-value and quantity-validation regressions use Node.js 18+ with
+no npm dependencies:
+
+```bash
+node --test tests/browser/demo.test.cjs
+```
+
 ---
 
 ## License

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Preserve zero prices and zero stock in the demo form and free-product orders;
+  reject negative/non-finite prices and invalid stock quantities.
+
 - Keep in-memory records and the reset snapshot unchanged when a disk write fails.
   Use unique adjacent temporary files; report failed storage operations as HTTP 507.
 - Apply Studio configuration atomically, validate integer settings and seed options,
