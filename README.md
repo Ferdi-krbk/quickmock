@@ -163,12 +163,12 @@ Switch network conditions at runtime from the Studio UI or via `POST /_admin/cha
 | Preset Name | Latency (`delay_ms`) | Jitter (`jitter_ms`) | Failure Rate (`error_rate`) | Status Code |
 | :--- | :---: | :---: | :---: | :---: |
 | `clean` | `0 ms` | `0 ms` | `0%` | — (resets guards) |
-| `slow_3g` | `850 ms` | `±250 ms` | `0%` | — |
-| `flaky` | `120 ms` | `±60 ms` | `25%` | `503 Service Unavailable` |
+| `slow_3g` | `850 ms` | `+0–250 ms` | `0%` | — |
+| `flaky` | `120 ms` | `+0–60 ms` | `25%` | `503 Service Unavailable` |
 | `rate_limit` | `20 ms` | `0 ms` | `100%` | `429 Too Many Requests` |
 | `outage` | `40 ms` | `0 ms` | `100%` | `503 Service Unavailable` |
 
-- **CORS-Safe Fault Injection:** `OPTIONS` preflight requests automatically bypass Chaos faults and Auth guards, and `Access-Control-Allow-Origin: *` is attached to all responses (including `401`, `403`, `429`, `503`), ensuring browser `fetch()` / `axios` clients receive the exact HTTP status code instead of a CORS network error.
+- **CORS-Safe Fault Injection:** Mock API `OPTIONS` preflight requests bypass Chaos faults and Auth guards. CORS headers are also attached to error responses (`401`, `403`, `429`, `503`), so browser `fetch()` / `axios` clients can inspect the HTTP status. The allowed origin is either `*` or the requesting origin, depending on credential handling.
 
 ---
 
